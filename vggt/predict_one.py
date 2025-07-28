@@ -21,6 +21,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = '2'
 torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.deterministic = False
+from argparse import ArgumentParser, Namespace
 
 import argparse
 from pathlib import Path
@@ -43,28 +44,24 @@ from vggt.dependency.np_to_pycolmap import batch_np_matrix_to_pycolmap, batch_np
 # TODO: test with more cases
 # TODO: test different camera types
 
-
+# TODO 默认参数
+# --scene_dir=scene_dir --use_ba --fine_tracking
 def parse_args():
-    parser = argparse.ArgumentParser(description="VGGT Demo")
-    parser.add_argument("--scene_dir", type=str, required=True, help="Directory containing the scene images")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
-    parser.add_argument("--use_ba", action="store_true", default=False, help="Use BA for reconstruction")
-    ######### BA parameters #########
-    parser.add_argument(
-        "--max_reproj_error", type=float, default=3.0, help="Maximum reprojection error for reconstruction"
+    arg_temp = Namespace(
+        scene_dir='../scene_dir',
+        seed=42,
+        use_ba=True,
+        max_reproj_error=3.0,
+        shared_camera=False,
+        camera_type="SIMPLE_PINHOLE",
+        vis_thresh=0.2,
+        query_frame_num=3,
+        max_query_pts=1024,
+        fine_tracking=True,
+        conf_thres_value=5.0
     )
-    parser.add_argument("--shared_camera", action="store_true", default=False, help="Use shared camera for all images")
-    parser.add_argument("--camera_type", type=str, default="SIMPLE_PINHOLE", help="Camera type for reconstruction")
-    parser.add_argument("--vis_thresh", type=float, default=0.2, help="Visibility threshold for tracks")
-    parser.add_argument("--query_frame_num", type=int, default=3, help="Number of frames to query")
-    parser.add_argument("--max_query_pts", type=int, default=1024, help="Maximum number of query points")
-    parser.add_argument(
-        "--fine_tracking", action="store_true", default=False, help="Use fine tracking (slower but more accurate)"
-    )
-    parser.add_argument(
-        "--conf_thres_value", type=float, default=5.0, help="Confidence threshold value for depth filtering (wo BA)"
-    )
-    return parser.parse_args()
+    return arg_temp
+
 
 
 def run_VGGT(model, images, dtype, resolution=518):
@@ -110,22 +107,8 @@ def demo_fn(args):
 
     # Set device and dtype
     dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Using device: {device}")
     print(f"Using dtype: {dtype}")
 
-    # Run VGGT for camera and depth estimation
-    model = VGGT()
-    # _URL = "https://huggingface.co/facebook/VGGT-1B/resolve/main/model.pt"
-    # model.load_state_dict(torch.hub.load_state_dict_from_url(_URL))
-    
-    _URL = "ckpts/VGGT-1B/model.pt"
-    model.load_state_dict(torch.load(_URL))
-    
-    
-    model.eval()
-    model = model.to(device)
-    print(f"Model loaded")
 
     # Get image paths and preprocess them
     image_dir = os.path.join(args.scene_dir, "images")
@@ -302,8 +285,40 @@ def rename_colmap_recons_and_rescale_camera(
     return reconstruction
 
 
+# TODO 模型初始化一定要在全局
+# Run VGGT for camera and depth estimation
+model = VGGT()
+# _URL = "https://huggingface.co/facebook/VGGT-1B/resolve/main/model.pt"
+# model.load_state_dict(torch.hub.load_state_dict_from_url(_URL))
+
+_URL = "../ckpts/VGGT-1B/model.pt"
+model.load_state_dict(torch.load(_URL))
+
+
+model.eval()
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"Using device: {device}")
+model = model.to(device)
+print(f"Model loaded")
+
+# 参数
+args = parse_args()
+
+# 初始化 FastAPI
+app = FastAPI()
+# 接收图像并推理
+@app.post("/predict")
+async def predict_image():
+    try:
+        with torch.no_grad():
+            demo_fn(args)
+        return JSONResponse(content={"success": True, "result": "预测vggt成功"})
+    except Exception as e:
+        return JSONResponse(content={"success": False, "error": str(e)}, status_code=500)
+        
+    
 if __name__ == "__main__":
-    args = parse_args()
+    # TODO debug用
     with torch.no_grad():
         demo_fn(args)
 

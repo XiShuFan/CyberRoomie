@@ -13,6 +13,7 @@ import pycolmap
 import torch
 import torch.nn.functional as F
 from LightGlue.lightglue import ALIKED, SIFT, SuperPoint
+import os
 
 from .vggsfm_tracker import TrackerPredictor
 
@@ -41,7 +42,10 @@ def build_vggsfm_tracker(model_path=None):
     if model_path is None:
         # default_url = "https://huggingface.co/facebook/VGGSfM/resolve/main/vggsfm_v2_tracker.pt"
         # tracker.load_state_dict(torch.hub.load_state_dict_from_url(default_url))
-        default_url = "ckpts/VGGSfM/vggsfm_v2_tracker.pt"
+        if os.path.exists("ckpts/VGGSfM/vggsfm_v2_tracker.pt"):
+            default_url = "ckpts/VGGSfM/vggsfm_v2_tracker.pt"
+        else:
+            default_url = "../ckpts/VGGSfM/vggsfm_v2_tracker.pt"
         tracker.load_state_dict(torch.load(default_url))
     else:
         tracker.load_state_dict(torch.load(model_path))
@@ -71,7 +75,11 @@ def generate_rank_by_dino(
     images = F.interpolate(images, (image_size, image_size), mode="bilinear", align_corners=False)
 
     # Load DINO model
-    dino_v2_model = torch.hub.load("dinov2", model_name, source='local')
+    if os.path.exists("dinov2"):
+        dinov2_path = "dinov2"
+    else:
+        dinov2_path = "../dinov2"
+    dino_v2_model = torch.hub.load(dinov2_path, model_name, source='local')
     dino_v2_model.eval()
     dino_v2_model = dino_v2_model.to(device)
 

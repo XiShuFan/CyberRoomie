@@ -45,6 +45,7 @@
 import torch
 from kornia.color import rgb_to_grayscale
 from torch import nn
+import os
 
 from .utils import Extractor
 
@@ -143,7 +144,10 @@ class SuperPoint(Extractor):
 
         # url = "https://github.com/cvg/LightGlue/releases/download/v0.1_arxiv/superpoint_v1.pth"  # noqa
         # self.load_state_dict(torch.hub.load_state_dict_from_url(url))
-        self.load_state_dict(torch.load("ckpts/superpoint_v1.pth"))
+        if os.path.exists("ckpts/superpoint_v1.pth"):
+            self.load_state_dict(torch.load("ckpts/superpoint_v1.pth"))
+        else:
+            self.load_state_dict(torch.load("../ckpts/superpoint_v1.pth"))
 
         if self.conf.max_num_keypoints is not None and self.conf.max_num_keypoints <= 0:
             raise ValueError("max_num_keypoints must be positive or None")
