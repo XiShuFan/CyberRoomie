@@ -56,7 +56,7 @@ def parse_args():
         camera_type="SIMPLE_PINHOLE",
         vis_thresh=0.2,
         query_frame_num=3,
-        max_query_pts=1024,
+        max_query_pts=2048,
         fine_tracking=True,
         conf_thres_value=5.0
     )
