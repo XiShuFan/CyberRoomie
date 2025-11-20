@@ -1,3 +1,4 @@
 ckpts/
 *.pt
 .idea
+./scene_dir

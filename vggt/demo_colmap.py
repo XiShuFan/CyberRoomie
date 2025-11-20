@@ -67,6 +67,20 @@ def parse_args():
     return parser.parse_args()
 
 
+import numpy as np
+import cv2
+
+def save_depth_for_3dgs(depth, path):
+    # depth: float32 numpy, HxW or HxWx1, unit in meters
+
+    inv = 1.0 / depth
+    inv = np.clip(inv, 0.0, 1.0)
+
+    img = (inv * 65535).astype(np.uint16)
+    cv2.imwrite(path, img)
+
+
+
 def run_VGGT(model, images, dtype, resolution=518):
     # images: [B, 3, H, W]
 
@@ -147,6 +161,10 @@ def demo_fn(args):
     # Run VGGT to estimate camera and depth
     # Run with 518x518 images
     extrinsic, intrinsic, depth_map, depth_conf = run_VGGT(model, images, dtype, vggt_fixed_resolution)
+    print(f"shape={depth_map.shape}, min={depth_map.min().item()}, max={depth_map.max().item()}")
+    os.makedirs(args.scene_dir + "/depths", exist_ok=True)
+    for idx, base_image_path in enumerate(base_image_path_list):
+        save_depth_for_3dgs(depth_map[idx], os.path.join(args.scene_dir, "depths", base_image_path + ".png"))
     points_3d = unproject_depth_map_to_point_map(depth_map, extrinsic, intrinsic)
 
     if args.use_ba:
