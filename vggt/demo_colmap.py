@@ -15,7 +15,7 @@ from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import JSONResponse
 
 # 定义可用的GPU编号
-os.environ["CUDA_VISIBLE_DEVICES"] = '2'
+os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
 # Configure CUDA settings
 torch.backends.cudnn.enabled = True
@@ -56,8 +56,8 @@ def parse_args():
     parser.add_argument("--shared_camera", action="store_true", default=False, help="Use shared camera for all images")
     parser.add_argument("--camera_type", type=str, default="SIMPLE_PINHOLE", help="Camera type for reconstruction")
     parser.add_argument("--vis_thresh", type=float, default=0.2, help="Visibility threshold for tracks")
-    parser.add_argument("--query_frame_num", type=int, default=3, help="Number of frames to query")
-    parser.add_argument("--max_query_pts", type=int, default=1024, help="Maximum number of query points")
+    parser.add_argument("--query_frame_num", type=int, default=8, help="Number of frames to query")
+    parser.add_argument("--max_query_pts", type=int, default=2048, help="Maximum number of query points")
     parser.add_argument(
         "--fine_tracking", action="store_true", default=False, help="Use fine tracking (slower but more accurate)"
     )
@@ -153,7 +153,7 @@ def demo_fn(args):
     vggt_fixed_resolution = 518
     img_load_resolution = 1024
 
-    images, original_coords = load_and_preprocess_images_square(image_path_list, img_load_resolution)
+    images, original_coords, original_sizes = load_and_preprocess_images_square(image_path_list, img_load_resolution)
     images = images.to(device)
     original_coords = original_coords.to(device)
     print(f"Loaded {len(images)} images from {image_dir}")
@@ -164,7 +164,16 @@ def demo_fn(args):
     print(f"shape={depth_map.shape}, min={depth_map.min().item()}, max={depth_map.max().item()}")
     os.makedirs(args.scene_dir + "/depths", exist_ok=True)
     for idx, base_image_path in enumerate(base_image_path_list):
-        save_depth_for_3dgs(depth_map[idx], os.path.join(args.scene_dir, "depths", base_image_path + ".png"))
+        # 深度图还原回原始大小
+        origin_width, origin_height = original_sizes[idx]
+        # 原始图片最长的一条边
+        max_edge = max(origin_width, origin_height)
+        origin_depth = cv2.resize(depth_map[idx].squeeze(-1), (max_edge, max_edge), interpolation=cv2.INTER_LINEAR)
+        # 去除填充
+        offset_width = (max_edge - origin_width) // 2
+        offset_height = (max_edge - origin_height) // 2
+        origin_depth = origin_depth[offset_height:offset_height+origin_height, offset_width:offset_width+origin_width]
+        save_depth_for_3dgs(origin_depth, os.path.join(args.scene_dir, "depths", base_image_path))
     points_3d = unproject_depth_map_to_point_map(depth_map, extrinsic, intrinsic)
 
     if args.use_ba:

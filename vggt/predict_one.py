@@ -122,7 +122,7 @@ def demo_fn(args):
     vggt_fixed_resolution = 518
     img_load_resolution = 1024
 
-    images, original_coords = load_and_preprocess_images_square(image_path_list, img_load_resolution)
+    images, original_coords, original_sizes = load_and_preprocess_images_square(image_path_list, img_load_resolution)
     images = images.to(device)
     original_coords = original_coords.to(device)
     print(f"Loaded {len(images)} images from {image_dir}")

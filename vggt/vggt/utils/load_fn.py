@@ -34,6 +34,7 @@ def load_and_preprocess_images_square(image_path_list, target_size=1024):
 
     images = []
     original_coords = []  # Renamed from position_info to be more descriptive
+    original_sizes = []  # 图片原始尺寸
     to_tensor = TF.ToTensor()
 
     for image_path in image_path_list:
@@ -50,6 +51,7 @@ def load_and_preprocess_images_square(image_path_list, target_size=1024):
 
         # Get original dimensions
         width, height = img.size
+        original_sizes.append(np.array([width, height], dtype=np.int32))
 
         # Make the image square by padding the shorter dimension
         max_dim = max(width, height)
@@ -84,6 +86,7 @@ def load_and_preprocess_images_square(image_path_list, target_size=1024):
     # Stack all images
     images = torch.stack(images)
     original_coords = torch.from_numpy(np.array(original_coords)).float()
+    original_sizes = np.array(original_sizes, dtype=np.int32)
 
     # Add additional dimension if single image to ensure correct shape
     if len(image_path_list) == 1:
@@ -91,7 +94,7 @@ def load_and_preprocess_images_square(image_path_list, target_size=1024):
             images = images.unsqueeze(0)
             original_coords = original_coords.unsqueeze(0)
 
-    return images, original_coords
+    return images, original_coords, original_sizes
 
 
 def load_and_preprocess_images(image_path_list, mode="crop"):
