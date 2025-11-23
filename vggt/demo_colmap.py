@@ -26,6 +26,7 @@ import argparse
 from pathlib import Path
 import trimesh
 import pycolmap
+import json
 
 
 from vggt.models.vggt import VGGT
@@ -70,14 +71,32 @@ def parse_args():
 import numpy as np
 import cv2
 
+
 def save_depth_for_3dgs(depth, path):
     # depth: float32 numpy, HxW or HxWx1, unit in meters
 
-    inv = 1.0 / depth
-    inv = np.clip(inv, 0.0, 1.0)
+    # 1. 计算 inverse depth
+    inv = 1.0 / depth  # depth > 0 的前提由数据保证
 
-    img = (inv * 65535).astype(np.uint16)
+    # 2. 取 1% ~ 99% 百分位
+    valid = inv[inv > 0]
+    dmin, dmax = np.percentile(valid, [1, 99])
+
+    # 3. scale / offset 保证：inv = norm * scale + offset
+    scale = dmax - dmin
+    offset = dmin
+
+    # 4. 归一化到 0~1 的 norm
+    norm_inv = (inv - offset) / scale
+    norm_inv = norm_inv.clip(0, 1)
+
+    # 5. 保存 16bit PNG（0~65535）
+    img = (norm_inv * 65535).astype(np.uint16)
     cv2.imwrite(path, img)
+
+    # 供 JSON 使用
+    return {"scale": float(scale), "offset": float(offset)}
+
 
 
 
@@ -163,6 +182,7 @@ def demo_fn(args):
     extrinsic, intrinsic, depth_map, depth_conf = run_VGGT(model, images, dtype, vggt_fixed_resolution)
     print(f"shape={depth_map.shape}, min={depth_map.min().item()}, max={depth_map.max().item()}")
     os.makedirs(args.scene_dir + "/depths", exist_ok=True)
+    depth_params_json = {}
     for idx, base_image_path in enumerate(base_image_path_list):
         # 深度图还原回原始大小
         origin_width, origin_height = original_sizes[idx]
@@ -173,7 +193,8 @@ def demo_fn(args):
         offset_width = (max_edge - origin_width) // 2
         offset_height = (max_edge - origin_height) // 2
         origin_depth = origin_depth[offset_height:offset_height+origin_height, offset_width:offset_width+origin_width]
-        save_depth_for_3dgs(origin_depth, os.path.join(args.scene_dir, "depths", base_image_path))
+        depth_param_per_img = save_depth_for_3dgs(origin_depth, os.path.join(args.scene_dir, "depths", base_image_path))
+        depth_params_json[base_image_path] = depth_param_per_img
     points_3d = unproject_depth_map_to_point_map(depth_map, extrinsic, intrinsic)
 
     if args.use_ba:
@@ -284,6 +305,10 @@ def demo_fn(args):
 
     # Save point cloud for fast visualization
     trimesh.PointCloud(points_3d, colors=points_rgb).export(os.path.join(args.scene_dir, "sparse/0/points.ply"))
+    
+    # 保存深度参数
+    with open(os.path.join(args.scene_dir, "sparse/0/depth_params.json"), "w") as f:
+        json.dump(depth_params_json, f, indent=4)
 
     return True
 
