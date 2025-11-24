@@ -268,6 +268,26 @@ def demo_fn(args):
         points_xyf = create_pixel_coordinate_grid(num_frames, height, width)
 
         conf_mask = depth_conf >= conf_thres_value
+        
+        # TODO 当置信度太高导致无法生成足够的点时，降低置信度阈值
+        MIN_POINTS = 256
+        MIN_CONF_THRES = 0.1
+
+        # 自动降低阈值，避免空点云
+        while conf_mask.sum() < MIN_POINTS and conf_thres_value > MIN_CONF_THRES:
+            conf_thres_value -= 0.1    # 步长大一些，提高效率
+            conf_mask = depth_conf >= conf_thres_value
+            print(f"[Auto Adjust] conf_thres_value -> {conf_thres_value:.3f}")
+
+        # 如果仍然没有足够点，允许“保底策略”：直接取 top-k confidence
+        if conf_mask.sum() < MIN_POINTS:
+            print("[Fallback] 使用置信度 Top-K 生成点")
+            k = min(MIN_POINTS, depth_conf.numel())
+            topk_values, topk_idx = torch.topk(depth_conf.view(-1), k, largest=True)
+            conf_mask = torch.zeros_like(depth_conf, dtype=torch.bool).view(-1)
+            conf_mask[topk_idx] = True
+            conf_mask = conf_mask.view(depth_conf.shape)
+
         # at most writing 100000 3d points to colmap reconstruction object
         conf_mask = randomly_limit_trues(conf_mask, max_points_for_colmap)
 
