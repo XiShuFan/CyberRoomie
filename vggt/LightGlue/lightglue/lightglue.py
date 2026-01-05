@@ -20,6 +20,7 @@ else:
 
 torch.backends.cudnn.deterministic = True
 
+print("FLASH_AVAILABLE: ", FLASH_AVAILABLE)
 
 @torch.cuda.amp.custom_fwd(cast_inputs=torch.float32)
 def normalize_keypoints(

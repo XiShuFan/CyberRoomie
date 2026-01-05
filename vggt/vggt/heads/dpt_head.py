@@ -49,6 +49,7 @@ class DPTHead(nn.Module):
         conf_activation: str = "expp1",
         features: int = 256,
         out_channels: List[int] = [256, 512, 1024, 1024],
+        # 这里不是所有的层都需要
         intermediate_layer_idx: List[int] = [4, 11, 17, 23],
         pos_embed: bool = True,
         feature_only: bool = False,

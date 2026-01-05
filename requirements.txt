@@ -1,1 +1,8 @@
 pycolmap==3.10.0
+
+# conda 环境安装 ffmpeg
+# conda install -c conda-forge ffmpeg openh264
+# ln -s $CONDA_PREFIX/lib/libopenh264.so.6 $CONDA_PREFIX/lib/libopenh264.so.5
+
+# 
+# pip install flash-attn --no-build-isolation

@@ -139,6 +139,8 @@ class Aggregator(nn.Module):
             self.register_buffer(name, torch.FloatTensor(value).view(1, 1, 3, 1, 1), persistent=False)
 
         self.use_reentrant = False # hardcoded to False
+        
+        self.intermediate_layer_idx: List[int] = [4, 11, 17, 23]
 
     def __build_patch_embed__(
         self,
@@ -248,13 +250,18 @@ class Aggregator(nn.Module):
                     raise ValueError(f"Unknown attention type: {attn_type}")
 
             for i in range(len(frame_intermediates)):
-                # concat frame and global intermediates, [B x S x P x 2C]
-                concat_inter = torch.cat([frame_intermediates[i], global_intermediates[i]], dim=-1)
-                output_list.append(concat_inter)
+                # TODO 只保留需要的中间层
+                if len(output_list) in self.intermediate_layer_idx:
+                    # concat frame and global intermediates, [B x S x P x 2C]
+                    concat_inter = torch.cat([frame_intermediates[i], global_intermediates[i]], dim=-1)
+                    output_list.append(concat_inter)
+                else:
+                    output_list.append(None)
 
         del concat_inter
         del frame_intermediates
         del global_intermediates
+        torch.cuda.empty_cache()
         return output_list, self.patch_start_idx
 
     def _process_frame_attention(self, tokens, B, S, P, C, frame_idx, pos=None):
