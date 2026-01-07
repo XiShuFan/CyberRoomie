@@ -211,7 +211,7 @@ def demo_fn(args):
 
             # You can also change the pred_tracks to tracks from any other methods
             # e.g., from COLMAP, from CoTracker, or by chaining 2D matches from Lightglue/LoFTR.
-            pred_tracks, pred_vis_scores, pred_confs, points_3d, points_rgb = predict_tracks(
+            pred_tracks, pred_vis_scores, _, points_3d, points_rgb = predict_tracks(
                 images,
                 conf=depth_conf,
                 points_3d=points_3d,
@@ -229,7 +229,7 @@ def demo_fn(args):
         track_mask = pred_vis_scores > args.vis_thresh
 
         # TODO: radial distortion, iterative BA, masks
-        reconstruction, valid_track_mask = batch_np_matrix_to_pycolmap(
+        reconstruction, _ = batch_np_matrix_to_pycolmap(
             points_3d,
             extrinsic,
             intrinsic,
@@ -241,6 +241,8 @@ def demo_fn(args):
             camera_type=args.camera_type,
             points_rgb=points_rgb,
         )
+        
+        torch.cuda.empty_cache()
 
         if reconstruction is None:
             raise ValueError("No reconstruction can be built with BA")
