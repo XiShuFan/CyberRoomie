@@ -210,7 +210,11 @@ def demo_fn(args, part):
     # Run with 518x518 images
     extrinsic, intrinsic, depth_map, depth_conf = run_VGGT(model, images, dtype, vggt_fixed_resolution)
     print(f"shape={depth_map.shape}, min={depth_map.min().item()}, max={depth_map.max().item()}")
-    os.makedirs(args.scene_dir + f"/depths_{part}", exist_ok=True)
+    if part == "0":
+        depths_path = args.scene_dir + f"/depths"
+    else:
+        depths_path = args.scene_dir + f"/depths_{part}"
+    os.makedirs(depths_path, exist_ok=True)
     depth_params_json = {}
     for idx, base_image_path in enumerate(base_image_path_list):
         # 深度图还原回原始大小
@@ -222,7 +226,7 @@ def demo_fn(args, part):
         offset_width = (max_edge - origin_width) // 2
         offset_height = (max_edge - origin_height) // 2
         origin_depth = origin_depth[offset_height:offset_height+origin_height, offset_width:offset_width+origin_width]
-        depth_param_per_img = save_depth_for_3dgs(origin_depth, os.path.join(args.scene_dir, f"depths_{part}", base_image_path))
+        depth_param_per_img = save_depth_for_3dgs(origin_depth, os.path.join(depths_path, base_image_path))
         depth_params_json[base_image_path] = depth_param_per_img
     points_3d = unproject_depth_map_to_point_map(depth_map, extrinsic, intrinsic)
 
