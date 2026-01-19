@@ -47,6 +47,7 @@ from vggt.dependency.np_to_pycolmap import batch_np_matrix_to_pycolmap, batch_np
 
 def parse_args():
     parser = argparse.ArgumentParser(description="VGGT Demo")
+    parser.add_argument("--many_parts", action="store_true", default=False, help="Run with many parts for large scenes")
     parser.add_argument("--scene_dir", type=str, required=True, help="Directory containing the scene images")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
     parser.add_argument("--use_ba", action="store_true", default=False, help="Use BA for reconstruction")
@@ -128,7 +129,21 @@ def run_VGGT(model, images, dtype, resolution=518):
     return extrinsic, intrinsic, depth_map, depth_conf
 
 
-def demo_fn(args):
+def is_even_frame(path):
+    filename = os.path.basename(path)
+    name_part = os.path.splitext(filename)[0]
+    try:
+        number = int(name_part.split('_')[-1])
+        return number % 2 == 0
+    except (ValueError, IndexError):
+        return False
+    
+def uniform_pick(seq, n):
+    idx = np.linspace(0, len(seq) - 1, n, dtype=int)
+    return [seq[i] for i in idx]
+
+
+def demo_fn(args, part):
     # Print configuration
     print("Arguments:", vars(args))
 
@@ -164,6 +179,19 @@ def demo_fn(args):
     image_dir = os.path.join(args.scene_dir, "images")
     image_path_list = glob.glob(os.path.join(image_dir, "*"))
     image_path_list = [path for path in image_path_list if path.endswith(('.png', '.jpg', '.jpeg'))]
+
+    even_path_list = [p for p in image_path_list if is_even_frame(p)]
+    odd_path_list = [p for p in image_path_list if not is_even_frame(p)]
+
+    if part == "even":
+        image_path_list = even_path_list + uniform_pick(odd_path_list, 10)
+    elif part == "odd":
+        image_path_list = odd_path_list + uniform_pick(even_path_list, 10)
+    else:
+        print(f"part {part} should be 0")
+        assert len(image_path_list) <= 50
+
+
     if len(image_path_list) == 0:
         raise ValueError(f"No images found in {image_dir}")
     base_image_path_list = [os.path.basename(path) for path in image_path_list]
@@ -182,7 +210,7 @@ def demo_fn(args):
     # Run with 518x518 images
     extrinsic, intrinsic, depth_map, depth_conf = run_VGGT(model, images, dtype, vggt_fixed_resolution)
     print(f"shape={depth_map.shape}, min={depth_map.min().item()}, max={depth_map.max().item()}")
-    os.makedirs(args.scene_dir + "/depths", exist_ok=True)
+    os.makedirs(args.scene_dir + f"/depths_{part}", exist_ok=True)
     depth_params_json = {}
     for idx, base_image_path in enumerate(base_image_path_list):
         # 深度图还原回原始大小
@@ -194,7 +222,7 @@ def demo_fn(args):
         offset_width = (max_edge - origin_width) // 2
         offset_height = (max_edge - origin_height) // 2
         origin_depth = origin_depth[offset_height:offset_height+origin_height, offset_width:offset_width+origin_width]
-        depth_param_per_img = save_depth_for_3dgs(origin_depth, os.path.join(args.scene_dir, "depths", base_image_path))
+        depth_param_per_img = save_depth_for_3dgs(origin_depth, os.path.join(args.scene_dir, f"depths_{part}", base_image_path))
         depth_params_json[base_image_path] = depth_param_per_img
     points_3d = unproject_depth_map_to_point_map(depth_map, extrinsic, intrinsic)
 
@@ -321,16 +349,16 @@ def demo_fn(args):
         shared_camera=shared_camera,
     )
 
-    print(f"Saving reconstruction to {args.scene_dir}/sparse/0")
-    sparse_reconstruction_dir = os.path.join(args.scene_dir, "sparse/0")
+    print(f"Saving reconstruction to {args.scene_dir}/sparse/{part}")
+    sparse_reconstruction_dir = os.path.join(args.scene_dir, f"sparse/{part}")
     os.makedirs(sparse_reconstruction_dir, exist_ok=True)
     reconstruction.write(sparse_reconstruction_dir)
 
     # Save point cloud for fast visualization
-    trimesh.PointCloud(points_3d, colors=points_rgb).export(os.path.join(args.scene_dir, "sparse/0/points.ply"))
+    trimesh.PointCloud(points_3d, colors=points_rgb).export(os.path.join(args.scene_dir, f"sparse/{part}/points.ply"))
     
     # 保存深度参数
-    with open(os.path.join(args.scene_dir, "sparse/0/depth_params.json"), "w") as f:
+    with open(os.path.join(args.scene_dir, f"sparse/{part}/depth_params.json"), "w") as f:
         json.dump(depth_params_json, f, indent=4)
 
     return True
@@ -380,7 +408,11 @@ def rename_colmap_recons_and_rescale_camera(
 if __name__ == "__main__":
     args = parse_args()
     with torch.no_grad():
-        demo_fn(args)
+        if args.many_parts:
+            demo_fn(args, part="even")
+            demo_fn(args, part="odd")
+        else:
+            demo_fn(args, part="0")
 
 
 # Work in Progress (WIP)
